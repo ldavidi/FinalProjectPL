@@ -1,4 +1,3 @@
-# parser.py
 from lexer import *
 from ast import *
 
@@ -44,22 +43,22 @@ class Parser:
 
     def lambda_expression(self):
         self.eat(LAMBDA)
-        self.eat(LPAREN)
         params = []
-        while self.current_token.type != RPAREN:
+        while self.current_token.type == IDENTIFIER:
             param = self.current_token
             self.eat(IDENTIFIER)
             params.append(param)
             if self.current_token.type == COMMA:
                 self.eat(COMMA)
-        self.eat(RPAREN)
-        body = self.expr()
+        self.eat(PERIOD)
+        body = self.factor()
         return LambdaExpression(params, body)
 
-    def function_application(self):
-        func_name = self.current_token
-        func = self.current_token
-        self.eat(IDENTIFIER)
+    def function_application(self, func_node=None):
+        if not func_node:
+            func_name = self.current_token
+            func_node = Variable(func_name)
+            self.eat(IDENTIFIER)
         self.eat(LPAREN)
         args = []
         while self.current_token.type != RPAREN:
@@ -67,7 +66,7 @@ class Parser:
             if self.current_token.type == COMMA:
                 self.eat(COMMA)
         self.eat(RPAREN)
-        return FunctionApplication(Variable(func_name), args)
+        return FunctionApplication(func_node, args)
 
     def if_statement(self):
         self.eat(IF)
@@ -96,9 +95,11 @@ class Parser:
             return Literal(token)
         elif token.type == LPAREN:
             self.eat(LPAREN)
-            node = self.expr()
+            expr_node = self.expr()
             self.eat(RPAREN)
-            return node
+            while self.current_token.type == LPAREN:
+                expr_node = self.function_application(expr_node)
+            return expr_node
         elif token.type == NOT:
             self.eat(NOT)
             node = UnaryOperation(token, self.factor())
@@ -112,14 +113,16 @@ class Parser:
         elif token.type == DEFUN:
             return self.function_definition()
         elif token.type == LAMBDA:
-            return self.lambda_expression()
+            lambda_node = self.lambda_expression()
+            if self.current_token.type == LPAREN:
+                lambda_node = self.function_application(lambda_node)
+            return lambda_node
         elif token.type == IF:
             return self.if_statement()
         self.error('Unexpected token')
 
     def term(self):
         node = self.factor()
-
         while self.current_token.type in (MUL, DIV, MOD):
             token = self.current_token
             if token.type == MUL:
@@ -128,14 +131,11 @@ class Parser:
                 self.eat(DIV)
             elif token.type == MOD:
                 self.eat(MOD)
-
             node = BinaryOperation(left=node, op=token, right=self.factor())
-
         return node
 
     def expr(self):
         node = self.term()
-
         while self.current_token.type in (PLUS, MINUS, AND, OR, EQ, NEQ, GT, LT, GTE, LTE):
             token = self.current_token
             if token.type == PLUS:
@@ -158,18 +158,13 @@ class Parser:
                 self.eat(GTE)
             elif token.type == LTE:
                 self.eat(LTE)
-
             node = BinaryOperation(left=node, op=token, right=self.term())
-
         return node
 
     def program(self):
         nodes = []
         while self.current_token.type != EOF:
-            if self.current_token.type == DEFUN:
-                nodes.append(self.function_definition())
-            else:
-                nodes.append(self.expr())
+            nodes.append(self.expr())
         return nodes
 
     def parse(self):

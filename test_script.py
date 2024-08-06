@@ -4,7 +4,7 @@ from parser import Parser
 from interpreter import Interpreter
 
 def test_lexer():
-    text = "(lambda (x) (lambda (y) (x + y)))(3)(4)"
+    text = "(lambda x. (lambda y. (x + y)))(3)(4)"
     lexer = Lexer(text)
     token = lexer.get_next_token()
     while token.type != EOF:
@@ -12,7 +12,7 @@ def test_lexer():
         token = lexer.get_next_token()
 
 def test_parser():
-    text = "(lambda (x) (lambda (y) (x + y)))(3)(4)"
+    text = "(lambda x. (lambda y. (x + y)))(3)(4)"
     lexer = Lexer(text)
     parser = Parser(lexer)
     tree = parser.parse()
@@ -26,7 +26,7 @@ def test_interpreter():
     tree = parser.parse()
     interpreter = Interpreter()
     result = interpreter.interpret(tree)
-    print(result)
+    print(result)  # This should print 6
 
 if __name__ == '__main__':
     print("Testing Lexer")

@@ -27,6 +27,7 @@ EOF = 'EOF'
 COMMA = 'COMMA'
 IF = 'IF'
 ELSE = 'ELSE'
+PERIOD = 'PERIOD'
 
 # Token definition
 class Token:
@@ -191,6 +192,9 @@ class Lexer:
                 self.advance()
                 return Token('}', '}')
 
+            if self.current_char == '.':
+                self.advance()
+                return Token(PERIOD, '.')
             self.error()
 
         return Token(EOF, None)

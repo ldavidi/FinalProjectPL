@@ -1,6 +1,5 @@
 from ast import *
 from lexer import *
-# interpreter.py
 
 class Interpreter:
     def __init__(self):
@@ -70,25 +69,29 @@ class Interpreter:
         self.global_env[node.name.value] = node
 
     def visit_LambdaExpression(self, node):
-        return node
+        def func(*args):
+            if len(args) != len(node.params):
+                self.error(f'Lambda function expected {len(node.params)} arguments, got {len(args)}')
+            new_env = self.global_env.copy()
+            for param, arg in zip(node.params, args):
+                new_env[param.value] = arg
+            previous_env = self.global_env
+            self.global_env = {**node.env, **new_env}
+            result = self.visit(node.body)
+            self.global_env = previous_env
+            return result
+
+        node.env = self.global_env.copy()
+        return func
 
     def visit_FunctionApplication(self, node):
         func = self.visit(node.func)
         args = [self.visit(arg) for arg in node.args]
-        if isinstance(func, FunctionDefinition):
+        if callable(func):
+            return func(*args)
+        elif isinstance(func, FunctionDefinition):
             if len(args) != len(func.params):
                 self.error(f'Function {func.name.value} expected {len(func.params)} arguments, got {len(args)}')
-            new_env = self.global_env.copy()
-            for param, arg in zip(func.params, args):
-                new_env[param.value] = arg
-            previous_env = self.global_env
-            self.global_env = new_env
-            result = self.visit(func.body)
-            self.global_env = previous_env
-            return result
-        elif isinstance(func, LambdaExpression):
-            if len(args) != len(func.params):
-                self.error(f'Lambda function expected {len(func.params)} arguments, got {len(args)}')
             new_env = self.global_env.copy()
             for param, arg in zip(func.params, args):
                 new_env[param.value] = arg
