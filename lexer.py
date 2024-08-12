@@ -1,4 +1,3 @@
-# lexer.py
 import re
 
 # Token types
@@ -27,8 +26,10 @@ EOF = 'EOF'
 COMMA = 'COMMA'
 IF = 'IF'
 ELSE = 'ELSE'
+PERIOD = 'PERIOD'
+PRINT = 'PRINT'
 
-# Token definition
+# Token class definition
 class Token:
     def __init__(self, type, value):
         self.type = type
@@ -40,7 +41,7 @@ class Token:
     def __repr__(self):
         return self.__str__()
 
-# Lexer definition
+# Lexer class definition
 class Lexer:
     keywords = {
         'defun': DEFUN,
@@ -49,6 +50,7 @@ class Lexer:
         'else': ELSE,
         'True': BOOLEAN,
         'False': BOOLEAN,
+        'print': PRINT
     }
 
     def __init__(self, text):
@@ -59,6 +61,7 @@ class Lexer:
         self.column = 1
 
     def advance(self):
+        """Move to the next character in the input text."""
         if self.current_char == '\n':
             self.line += 1
             self.column = 1
@@ -71,10 +74,17 @@ class Lexer:
             self.current_char = self.text[self.pos]
 
     def skip_whitespace(self):
+        """Skip over any whitespace characters."""
         while self.current_char is not None and self.current_char.isspace():
             self.advance()
 
+    def skip_comment(self):
+        """Skip over comments starting with '#' until the end of the line."""
+        while self.current_char is not None and self.current_char != '\n':
+            self.advance()
+
     def integer(self):
+        """Return a multi-digit integer consumed from the input."""
         result = ''
         while self.current_char is not None and self.current_char.isdigit():
             result += self.current_char
@@ -82,6 +92,7 @@ class Lexer:
         return int(result)
 
     def _id(self):
+        """Handle identifiers and reserved keywords."""
         result = ''
         while self.current_char is not None and (self.current_char.isalnum() or self.current_char == '_'):
             result += self.current_char
@@ -92,9 +103,14 @@ class Lexer:
         return Token(token_type, result)
 
     def get_next_token(self):
+        """Lexical analyzer (tokenizer) for breaking input text into tokens."""
         while self.current_char is not None:
             if self.current_char.isspace():
                 self.skip_whitespace()
+                continue
+
+            if self.current_char == '#':
+                self.skip_comment()
                 continue
 
             if self.current_char.isdigit():
@@ -191,9 +207,14 @@ class Lexer:
                 self.advance()
                 return Token('}', '}')
 
+            if self.current_char == '.':
+                self.advance()
+                return Token(PERIOD, '.')
+
             self.error()
 
         return Token(EOF, None)
 
     def error(self):
+        """Raise a lexer error for invalid characters."""
         raise Exception(f'Lexer error at position {self.pos}: Invalid character {self.current_char}')

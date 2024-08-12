@@ -1,93 +1,115 @@
-# parser.py
 from lexer import *
 from ast import *
 
 class Parser:
+    """Parser that constructs an Abstract Syntax Tree (AST) from tokens."""
+
     def __init__(self, lexer):
         self.lexer = lexer
         self.current_token = self.lexer.get_next_token()
 
     def error(self, message):
+        """Raise a syntax error with a custom message."""
         raise Exception(f'Parser error: {message} at token {self.current_token}')
 
     def eat(self, token_type):
+        """Consume the current token if it matches the expected type."""
         if self.current_token.type == token_type:
             self.current_token = self.lexer.get_next_token()
         else:
             self.error(f'Expected token {token_type}, got {self.current_token.type}')
 
     def peek(self):
+        """Look ahead to the next token without consuming the current one."""
         pos = self.lexer.pos
         current_char = self.lexer.current_char
-        token = self.lexer.get_next_token()
+        next_token = self.lexer.get_next_token()
         self.lexer.pos = pos
         self.lexer.current_char = current_char
-        return token
+        return next_token
 
-    def function_definition(self):
+    def parse_function_definition(self):
+        """Parse a function definition."""
         self.eat(DEFUN)
         name = self.current_token
         self.eat(IDENTIFIER)
         self.eat(LPAREN)
-        params = []
+        parameters = []
         while self.current_token.type != RPAREN:
             param = self.current_token
             self.eat(IDENTIFIER)
-            params.append(param)
+            parameters.append(param)
             if self.current_token.type == COMMA:
                 self.eat(COMMA)
         self.eat(RPAREN)
         self.eat('{')
-        body = self.expr()
-        self.eat('}')
-        return FunctionDefinition(name, params, body)
 
-    def lambda_expression(self):
+        # Parsing multiple expressions in the function body
+        body = []
+        while self.current_token.type != '}':
+            body.append(self.parse_expression())
+
+        self.eat('}')
+        return FunctionDefinition(name, parameters, body)
+
+    def parse_lambda_expression(self):
+        """Parse a lambda expression."""
         self.eat(LAMBDA)
-        self.eat(LPAREN)
-        params = []
-        while self.current_token.type != RPAREN:
+        parameters = []
+        while self.current_token.type == IDENTIFIER:
             param = self.current_token
             self.eat(IDENTIFIER)
-            params.append(param)
+            parameters.append(param)
             if self.current_token.type == COMMA:
                 self.eat(COMMA)
-        self.eat(RPAREN)
-        body = self.expr()
-        return LambdaExpression(params, body)
+        self.eat(PERIOD)
+        body = self.parse_expression()
+        return LambdaExpression(parameters, body)
 
-    def function_application(self):
-        func_name = self.current_token
-        func = self.current_token
-        self.eat(IDENTIFIER)
+    def parse_function_application(self, func_node=None):
+        """Parse a function or lambda application."""
+        if not func_node:
+            func_name = self.current_token
+            func_node = Variable(func_name)
+            self.eat(IDENTIFIER)
         self.eat(LPAREN)
-        args = []
+        arguments = []
         while self.current_token.type != RPAREN:
-            args.append(self.expr())
+            arguments.append(self.parse_expression())
             if self.current_token.type == COMMA:
                 self.eat(COMMA)
         self.eat(RPAREN)
-        return FunctionApplication(Variable(func_name), args)
+        return FunctionApplication(func_node, arguments)
 
-    def if_statement(self):
+    def parse_if_statement(self):
+        """Parse an if-else statement."""
         self.eat(IF)
         self.eat(LPAREN)
-        condition = self.expr()
+        condition = self.parse_expression()
         self.eat(RPAREN)
         self.eat('{')
-        true_block = self.expr()
+        true_block = []
+        while self.current_token.type != '}':
+            true_block.append(self.parse_expression())
         self.eat('}')
         if self.current_token.type == ELSE:
             self.eat(ELSE)
             self.eat('{')
-            false_block = self.expr()
+            false_block = []
+            while self.current_token.type != '}':
+                false_block.append(self.parse_expression())
             self.eat('}')
         else:
             false_block = None
         return IfStatement(condition, true_block, false_block)
 
-    def factor(self):
+    def parse_factor(self):
+        """Parse a factor, the simplest form of an expression."""
         token = self.current_token
+        if token.type == PRINT:
+            self.eat(PRINT)
+            expr = self.parse_expression()
+            return PrintStatement(expr)
         if token.type == INTEGER:
             self.eat(INTEGER)
             return Literal(token)
@@ -96,81 +118,81 @@ class Parser:
             return Literal(token)
         elif token.type == LPAREN:
             self.eat(LPAREN)
-            node = self.expr()
+            expr_node = self.parse_expression()
             self.eat(RPAREN)
-            return node
+            while self.current_token.type == LPAREN:
+                expr_node = self.parse_function_application(expr_node)
+            return expr_node
         elif token.type == NOT:
             self.eat(NOT)
-            node = UnaryOperation(token, self.factor())
+            node = UnaryOperation(token, self.parse_factor())
             return node
         elif token.type == IDENTIFIER and self.peek().type == LPAREN:
-            return self.function_application()
+            return self.parse_function_application()
         elif token.type == IDENTIFIER:
-            var = Variable(token)
+            var_node = Variable(token)
             self.eat(IDENTIFIER)
-            return var
+            return var_node
         elif token.type == DEFUN:
-            return self.function_definition()
+            return self.parse_function_definition()
         elif token.type == LAMBDA:
-            return self.lambda_expression()
+            lambda_node = self.parse_lambda_expression()
+            if self.current_token.type == LPAREN:
+                lambda_node = self.parse_function_application(lambda_node)
+            return lambda_node
         elif token.type == IF:
-            return self.if_statement()
+            return self.parse_if_statement()
         self.error('Unexpected token')
 
-    def term(self):
-        node = self.factor()
-
+    def parse_term(self):
+        """Parse a term, which can be a factor or a product/division/modulo operation."""
+        node = self.parse_factor()
         while self.current_token.type in (MUL, DIV, MOD):
-            token = self.current_token
-            if token.type == MUL:
+            operator = self.current_token
+            if operator.type == MUL:
                 self.eat(MUL)
-            elif token.type == DIV:
+            elif operator.type == DIV:
                 self.eat(DIV)
-            elif token.type == MOD:
+            elif operator.type == MOD:
                 self.eat(MOD)
-
-            node = BinaryOperation(left=node, op=token, right=self.factor())
-
+            node = BinaryOperation(left=node, operator=operator, right=self.parse_factor())
         return node
 
-    def expr(self):
-        node = self.term()
-
+    def parse_expression(self):
+        """Parse an expression, which can be a term or a complex operation."""
+        node = self.parse_term()
         while self.current_token.type in (PLUS, MINUS, AND, OR, EQ, NEQ, GT, LT, GTE, LTE):
-            token = self.current_token
-            if token.type == PLUS:
+            operator = self.current_token
+            if operator.type == PLUS:
                 self.eat(PLUS)
-            elif token.type == MINUS:
+            elif operator.type == MINUS:
                 self.eat(MINUS)
-            elif token.type == AND:
+            elif operator.type == AND:
                 self.eat(AND)
-            elif token.type == OR:
+            elif operator.type == OR:
                 self.eat(OR)
-            elif token.type == EQ:
+            elif operator.type == EQ:
                 self.eat(EQ)
-            elif token.type == NEQ:
+            elif operator.type == NEQ:
                 self.eat(NEQ)
-            elif token.type == GT:
+            elif operator.type == GT:
                 self.eat(GT)
-            elif token.type == LT:
+            elif operator.type == LT:
                 self.eat(LT)
-            elif token.type == GTE:
+            elif operator.type == GTE:
                 self.eat(GTE)
-            elif token.type == LTE:
+            elif operator.type == LTE:
                 self.eat(LTE)
-
-            node = BinaryOperation(left=node, op=token, right=self.term())
-
+            node = BinaryOperation(left=node, operator=operator, right=self.parse_term())
         return node
 
-    def program(self):
+    def parse_program(self):
+        """Parse the entire program, which consists of multiple expressions."""
         nodes = []
         while self.current_token.type != EOF:
-            if self.current_token.type == DEFUN:
-                nodes.append(self.function_definition())
-            else:
-                nodes.append(self.expr())
+            nodes.append(self.parse_expression())
         return nodes
 
     def parse(self):
-        return self.program()
+        """Start parsing the program."""
+        return self.parse_program()
