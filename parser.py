@@ -185,14 +185,9 @@ class Parser:
                 self.eat(LTE)
             node = BinaryOperation(left=node, operator=operator, right=self.parse_term())
         return node
-
-    def parse_program(self):
+    def parse(self):
         """Parse the entire program, which consists of multiple expressions."""
         nodes = []
         while self.current_token.type != EOF:
             nodes.append(self.parse_expression())
         return nodes
-
-    def parse(self):
-        """Start parsing the program."""
-        return self.parse_program()
