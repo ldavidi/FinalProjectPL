@@ -1,5 +1,0 @@
-defun check(x, y) {
-    (x > 0) && (y < 10)
-}
-
-check(5, 3)
