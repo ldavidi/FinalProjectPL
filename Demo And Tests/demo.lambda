@@ -1,0 +1,31 @@
+defun factorial(n) {
+    if (n == 0) {
+        1
+    } else {
+        n * factorial(n - 1)
+    }
+}
+
+# Test the factorial function
+print(factorial(5))  # Expected output: 120
+
+defun fibonacci(n, a, b) {
+    if (n > 0) {
+        print(a)
+        fibonacci(n - 1, b, a + b)
+    }
+}
+
+# Test the Fibonacci function
+fibonacci(10, 0, 1)  # Expected output: 0 1 1 2 3 5 8 13 21 34
+
+defun power(base, exponent) {
+    if (exponent == 0) {
+        1
+    } else {
+        (lambda x. (lambda y. (x * y)))(base)(power(base, exponent - 1))
+    }
+}
+
+# Calculate 2^10
+print(power(2, 10))
